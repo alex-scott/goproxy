@@ -117,8 +117,8 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 		targetTCP, targetOK := targetSiteCon.(halfClosable)
 		proxyClientTCP, clientOK := proxyClient.(halfClosable)
 		if targetOK && clientOK {
-			go copyAndClose(ctx, targetTCP, proxyClientTCP)
-			go copyAndClose(ctx, proxyClientTCP, targetTCP)
+			go copyAndClose(ctx, targetTCP, proxyClientTCP, 0)
+			go copyAndClose(ctx, proxyClientTCP, targetTCP, 1)
 		} else {
 			go func() {
 				var wg sync.WaitGroup
@@ -308,8 +308,14 @@ func copyOrWarn(ctx *ProxyCtx, dst io.Writer, src io.Reader, wg *sync.WaitGroup)
 	wg.Done()
 }
 
-func copyAndClose(ctx *ProxyCtx, dst, src halfClosable) {
-	if _, err := io.Copy(dst, src); err != nil {
+var CountBytesCallback = func(req *http.Request, bytes int64, direction int) {}
+
+func copyAndClose(ctx *ProxyCtx, dst, src halfClosable, direction int) {
+	bytes, err := io.Copy(dst, src)
+	if nil != ctx.Req {
+		CountBytesCallback(ctx.Req, bytes, direction)
+	}
+	if err != nil {
 		ctx.Warnf("Error copying to client: %s", err)
 	}
 
